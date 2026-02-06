@@ -161,13 +161,22 @@ end
 
 function _M.loop(self)
     local topics, t, p = self.topics
+    ngx_log(WARN, "[TRACE-SENDBUF-LOOP] loop() called, creating iterator")
 
     return function ()
+        ngx_log(WARN, "[TRACE-SENDBUF-LOOP] Iterator called, t=", truncate_for_log(t, 100), ", p=", p)
         if t then
             for partition_id, queue in next, topics[t], p do
                 p = partition_id
+                ngx_log(WARN, "[TRACE-SENDBUF-LOOP] Checking t=", truncate_for_log(t, 100), 
+                    ", partition_id=", partition_id, ", queue.index=", queue.index)
                 if queue.index > 0 then
+                    ngx_log(WARN, "[TRACE-SENDBUF-LOOP] Yielding (index > 0): topic=", truncate_for_log(t, 100),
+                        ", partition_id=", partition_id)
                     return t, partition_id, queue
+                else
+                    ngx_log(WARN, "[TRACE-SENDBUF-LOOP] Skipping (index=0): topic=", truncate_for_log(t, 100),
+                        ", partition_id=", partition_id)
                 end
             end
         end
@@ -176,14 +185,23 @@ function _M.loop(self)
         for topic, partitions in next, topics, t do
             t = topic
             p = nil
+            ngx_log(WARN, "[TRACE-SENDBUF-LOOP] Checking new topic=", truncate_for_log(topic, 100))
             for partition_id, queue in next, partitions, p do
                 p = partition_id
+                ngx_log(WARN, "[TRACE-SENDBUF-LOOP] Checking topic=", truncate_for_log(topic, 100), 
+                    ", partition_id=", partition_id, ", queue.index=", queue.index)
                 if queue.index > 0 then
+                    ngx_log(WARN, "[TRACE-SENDBUF-LOOP] Yielding (index > 0): topic=", truncate_for_log(topic, 100),
+                        ", partition_id=", partition_id)
                     return topic, partition_id, queue
+                else
+                    ngx_log(WARN, "[TRACE-SENDBUF-LOOP] Skipping (index=0): topic=", truncate_for_log(topic, 100),
+                        ", partition_id=", partition_id)
                 end
             end
         end
 
+        ngx_log(WARN, "[TRACE-SENDBUF-LOOP] Iterator exhausted, returning nil")
         return
     end
 end

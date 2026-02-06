@@ -343,7 +343,21 @@ local function _flush(premature, self)
 
     if not all_done then
         ngx_log(WARN, "[TRACE-FLUSH] Not all messages sent, iterating through sendbuffer errors")
+        ngx_log(WARN, "[TRACE-FLUSH] sendbuffer.queue_num=", sendbuffer.queue_num)
+        
+        -- Debug: dump all topics/partitions in sendbuffer before loop
+        for t, partitions in pairs(sendbuffer.topics) do
+            for p, buf in pairs(partitions) do
+                ngx_log(WARN, "[TRACE-FLUSH-DEBUG] Pre-loop buffer state: topic=", truncate_for_log(t, 1000),
+                    ", partition=", p, ", index=", buf.index, ", err=", buf.err or "nil",
+                    ", retryable=", tostring(buf.retryable), ", size=", buf.size)
+            end
+        end
+        
+        local loop_iteration_count = 0
         for topic, partition_id, buffer in sendbuffer:loop() do
+            loop_iteration_count = loop_iteration_count + 1
+            ngx_log(WARN, "[TRACE-FLUSH] Loop iteration #", loop_iteration_count)
             local queue, index, err, retryable = buffer.queue, buffer.index, buffer.err, buffer.retryable
             
             ngx_log(WARN, "[TRACE-FLUSH] Error buffer: topic=", topic, ", partition_id=", partition_id,
@@ -374,6 +388,7 @@ local function _flush(premature, self)
 
             sendbuffer:clear(topic, partition_id)
         end
+        ngx_log(WARN, "[TRACE-FLUSH] Loop completed, total iterations=", loop_iteration_count)
     end
 
     _flush_unlock(self)
