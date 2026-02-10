@@ -120,19 +120,23 @@ end
 
 
 local function produce_decode(resp)
+    ngx_log(WARN, "[TRACE-DECODE] Starting produce_decode")
     local topic_num = resp:int32()
+    ngx_log(WARN, "[TRACE-DECODE] Response contains ", topic_num, " topics")
     local ret = new_tab(0, topic_num)
     local api_version = resp.api_version
 
     for i = 1, topic_num do
         local topic = resp:string()
         local partition_num = resp:int32()
+        ngx_log(WARN, "[TRACE-DECODE] Topic: ", topic, ", partitions: ", partition_num)
 
         ret[topic] = {}
 
         -- ignore ThrottleTime
         for j = 1, partition_num do
             local partition = resp:int32()
+            local errcode, offset, timestamp
 
             if api_version == API_VERSION_V0 or api_version == API_VERSION_V1 then
                 ret[topic][partition] = {
@@ -150,6 +154,7 @@ local function produce_decode(resp)
         end
     end
 
+    ngx_log(WARN, "[TRACE-DECODE] produce_decode completed")
     return ret
 end
 
