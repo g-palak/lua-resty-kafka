@@ -304,7 +304,7 @@ end
 
 function _M.choose_broker(self, topic, partition_id)
     ngx_log(WARN, "[TRACE-CLIENT] choose_broker called for topic=", topic, ", partition_id=", partition_id)
-    _fetch_metadata(self, topic)
+    -- _fetch_metadata(self, topic)
     local brokers, partitions = self:fetch_metadata(topic)
     ngx_log(WARN, "[TRACE-CLIENT] choose_broker returned brokers=", brokers, ", partitions=", partitions)
     if not brokers then
