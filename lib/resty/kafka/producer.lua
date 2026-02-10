@@ -231,6 +231,14 @@ local function _send(self, broker_conf, topic_partitions)
                             retryable0, ", topic: ", topic, ", partition_id: ", partition_id, ", length: ", index / 2)
                         ngx_log(INFO, "retry to send messages to kafka err: ", err.msg, "(", errcode, "), retryable: ",
                             retryable0, ", topic: ", topic, ", partition_id: ", partition_id, ", length: ", index / 2)
+                        
+                        -- Force immediate metadata refresh for NOT_LEADER_OR_FOLLOWER errors
+                        if errcode == 6 then
+                            ngx_log(WARN, "[TRACE-SEND] NOT_LEADER_OR_FOLLOWER detected, forcing immediate metadata refresh")
+                            ngx_sleep(0.1)  -- Small delay to allow metadata to propagate
+                            self.client:refresh()
+                            ngx_log(WARN, "[TRACE-SEND] Metadata refresh completed after NOT_LEADER_OR_FOLLOWER")
+                        end
                     end
                 end
             end
