@@ -275,8 +275,25 @@ local function _batch_send(self, sendbuffer)
 
         for i = 1, send_num, 2 do
             local broker_conf, topic_partitions = sendbroker[i], sendbroker[i + 1]
+            
+            -- Calculate total messages and bytes in this batch
+            local total_messages = 0
+            local total_bytes = 0
+            local partition_count = 0
+            for topic, partitions in pairs(topic_partitions.topics) do
+                for partition_id, buffer in pairs(partitions.partitions) do
+                    total_messages = total_messages + (buffer.index / 2)
+                    total_bytes = total_bytes + buffer.size
+                    partition_count = partition_count + 1
+                end
+            end
+            
             ngx_log(WARN, "[TRACE-BATCH] Sending batch ", (i + 1) / 2, " to broker=", 
-                broker_conf.host, ":", broker_conf.port)
+                broker_conf.host, ":", broker_conf.port,
+                ", total_messages=", total_messages,
+                ", total_bytes=", total_bytes,
+                ", topics=", topic_partitions.topic_num,
+                ", partitions=", partition_count)
 
             _send(self, broker_conf, topic_partitions)
         end
