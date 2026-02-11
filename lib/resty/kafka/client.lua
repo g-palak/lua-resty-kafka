@@ -12,7 +12,6 @@ local ngx_log = ngx.log
 local ERR = ngx.ERR
 local INFO = ngx.INFO
 local DEBUG = ngx.DEBUG
-local WARN = ngx.WARN
 local debug = ngx.config.debug
 local pid = ngx.worker.pid
 local time = ngx.time
@@ -155,7 +154,6 @@ end
 
 
 local function _fetch_metadata(self, new_topic)
-    ngx_log(WARN, "[TRACE-META] _fetch_metadata called, new_topic=", new_topic or "nil")
     
     local topics, num = {}, 0
     for tp, _p in pairs(self.topic_partitions) do
@@ -169,11 +167,8 @@ local function _fetch_metadata(self, new_topic)
     end
 
     if num == 0 then
-        ngx_log(WARN, "[TRACE-META] No topics to fetch metadata for")
         return nil, "not topic"
     end
-    
-    ngx_log(WARN, "[TRACE-META] Fetching metadata for ", num, " topics")
 
     local broker_list = self.broker_list
     local sc = self.socket_config
@@ -184,37 +179,14 @@ local function _fetch_metadata(self, new_topic)
                                         broker_list[i].port,
                                         broker_list[i].sasl_config
         host = sc.resolver and sc.resolver(host) or host
-        ngx_log(WARN, "[TRACE-META] Trying broker ", i, ": ", host, ":", port)
         local bk = broker:new(host, port, sc, sasl_config)
 
         local resp, err = bk:send_receive(req)
         if not resp then
-            ngx_log(WARN, "[TRACE-META] Broker ", host, ":", port, " failed: ", err)
             ngx_log(INFO, "broker fetch metadata failed, err:", err,
                           ", host: ", host, ", port: ", port)
         else
             local brokers, topic_partitions = metadata_decode(resp)
-            
-            -- Log discovered brokers
-            ngx_log(WARN, "[TRACE-META] Metadata received, discovered brokers:")
-            for broker_id, b in pairs(brokers) do
-                if type(b) == "table" and b.host then
-                    ngx_log(WARN, "[TRACE-META]   Broker ", broker_id, ": ", b.host, ":", b.port)
-                end
-            end
-            
-            -- Log partition leaders for each topic
-            ngx_log(WARN, "[TRACE-META] Partition leaders:")
-            for tp, partitions in pairs(topic_partitions) do
-                if type(partitions) == "table" then
-                    ngx_log(WARN, "[TRACE-META]   Topic: ", tp, ", num_partitions: ", partitions.num or "unknown")
-                    for part_id, part_info in pairs(partitions) do
-                        if type(part_info) == "table" and part_info.leader then
-                            ngx_log(WARN, "[TRACE-META]     Partition ", part_id, ": leader=", part_info.leader)
-                        end
-                    end
-                end
-            end
             
             -- Confluent Cloud need the SASL auth on all requests, including to brokers
             -- we have been referred to. This injects the SASL auth in.
@@ -231,7 +203,6 @@ local function _fetch_metadata(self, new_topic)
                           ", host: ", broker.host, ", port: ", broker.port)
             else
                 self.api_versions = api_versions
-                ngx_log(WARN, "[TRACE-META] Metadata refresh complete")
 
                 return brokers, topic_partitions, api_versions
             end
@@ -291,11 +262,9 @@ end
 function _M.fetch_metadata(self, topic)
     local brokers, partitions = _metadata_cache(self, topic)
     if brokers then
-        ngx_log(WARN, "[TRACE-CLIENT] fetch_metadata for topic=", topic, " - using CACHED metadata")
         return brokers, partitions
     end
 
-    ngx_log(WARN, "[TRACE-CLIENT] fetch_metadata for topic=", topic, " - cache miss, fetching FRESH metadata")
     _fetch_metadata(self, topic)
 
     return _metadata_cache(self, topic)
@@ -303,42 +272,22 @@ end
 
 
 function _M.choose_broker(self, topic, partition_id)
-    ngx_log(WARN, "[TRACE-CLIENT] choose_broker called for topic=", topic, ", partition_id=", partition_id)
     -- _fetch_metadata(self, topic)
     local brokers, partitions = self:fetch_metadata(topic)
-    ngx_log(WARN, "[TRACE-CLIENT] choose_broker returned brokers=", brokers, ", partitions=", partitions)
     if not brokers then
-        ngx_log(WARN, "[TRACE-CLIENT] fetch_metadata failed: ", partitions)
         return nil, partitions
     end
 
     local partition = partitions[partition_id]
     if not partition then
-        ngx_log(WARN, "[TRACE-CLIENT] Partition ", partition_id, " not found in metadata")
-        ngx_log(WARN, "[TRACE-CLIENT] Available partitions: num=", partitions.num)
         return nil, "not found partition"
     end
 
-    ngx_log(WARN, "[TRACE-CLIENT] Partition ", partition_id, " leader=", partition.leader, 
-        ", replicas=", partition.replicas and table.concat(partition.replicas, ",") or "nil",
-        ", isr=", partition.isr and table.concat(partition.isr, ",") or "nil")
-
     local config = brokers[partition.leader]
     if not config then
-        _fetch_metadata(self, topic)
-        ngx_log(WARN, "[TRACE-CLIENT] Broker ", partition.leader, " not found in broker list")
-        ngx_log(WARN, "[TRACE-CLIENT] Available brokers:")
-        for broker_id, broker_config in pairs(brokers) do
-            if type(broker_config) == "table" and broker_config.host then
-                ngx_log(WARN, "[TRACE-CLIENT]   Broker ", broker_id, ": ", 
-                    broker_config.host, ":", broker_config.port)
-            end
-        end
+        _fetch_metadata(self, topic)    
         return nil, "not found broker"
     end
-
-    ngx_log(WARN, "[TRACE-CLIENT] Selected broker ", partition.leader, ": ", 
-        config.host, ":", config.port, " for topic=", topic, ", partition=", partition_id)
 
     return config
 end

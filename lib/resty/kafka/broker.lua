@@ -9,8 +9,6 @@ local setmetatable = setmetatable
 local tcp = ngx.socket.tcp
 local pid = ngx.worker.pid
 local tostring = tostring
-local ngx_log = ngx.log
-local WARN = ngx.WARN
 
 local sasl = require "resty.kafka.sasl"
 
@@ -124,72 +122,50 @@ end
 
 
 function _M.send_receive(self, request)
-    ngx_log(WARN, "[TRACE-BROKER] send_receive called for host=", self.host, ", port=", self.port)
     
     local sock, err = tcp()
     if not sock then
-        ngx_log(WARN, "[TRACE-BROKER] Failed to create socket: ", err)
         return nil, err, true
     end
 
     sock:settimeout(self.config.socket_timeout)
 
-    ngx_log(WARN, "[TRACE-BROKER] Connecting to host=", self.host, ", port=", self.port, 
-        ", timeout=", self.config.socket_timeout)
     local ok, err = sock:connect(self.host, self.port)
     if not ok then
-        ngx_log(WARN, "[TRACE-BROKER] Connection failed to ", self.host, ":", self.port, ", err=", err)
         return nil, err, true
     end
 
     local times, err = sock:getreusedtimes()
     if not times then
-        ngx_log(WARN, "[TRACE-BROKER] Failed to get reused times: ", err)
         return nil, "failed to get reused time: " .. tostring(err), true
     end
     
-    ngx_log(WARN, "[TRACE-BROKER] Connected to ", self.host, ":", self.port, 
-        ", pool_reused_times=", times, ", pool_key=", self.host, ":", self.port)
 
     if self.config.ssl and times == 0 then
         -- first connectted connnection
-        ngx_log(WARN, "[TRACE-BROKER] Performing SSL handshake (fresh connection)")
         local ok, err = sock:sslhandshake(false, self.host,
                                           self.config.ssl_verify)
         if not ok then
-            ngx_log(WARN, "[TRACE-BROKER] SSL handshake failed: ", err)
             return nil, "failed to do SSL handshake with "
                         ..  self.host .. ":" .. tostring(self.port) .. ": "
                         .. err, true
         end
-        ngx_log(WARN, "[TRACE-BROKER] SSL handshake successful")
     end
 
     if self.auth and times == 0 then -- SASL AUTH
-        ngx_log(WARN, "[TRACE-BROKER] Performing SASL auth (", self.auth.mechanism, ") - fresh connection")
         local ok, err = sasl_auth(sock, self)
         if  not ok then
-            ngx_log(WARN, "[TRACE-BROKER] SASL auth failed: ", err)
             return nil, "failed to do " .. self.auth.mechanism .." auth with "
                         ..  self.host .. ":" .. tostring(self.port) .. ": "
                         .. err, true
 
         end
-        ngx_log(WARN, "[TRACE-BROKER] SASL auth successful")
     end
 
-    ngx_log(WARN, "[TRACE-BROKER] Sending request and waiting for response")
     local data, err, retryable = _sock_send_recieve(sock, request)
     
-    if data then
-        ngx_log(WARN, "[TRACE-BROKER] Response received successfully from ", self.host, ":", self.port)
-    else
-        ngx_log(WARN, "[TRACE-BROKER] Send/receive failed: err=", err, ", retryable=", tostring(retryable))
-    end
 
     sock:setkeepalive(self.config.keepalive_timeout, self.config.keepalive_size)
-    ngx_log(WARN, "[TRACE-BROKER] Connection returned to pool, keepalive_timeout=", 
-        self.config.keepalive_timeout, ", keepalive_size=", self.config.keepalive_size)
 
     return data, err, retryable
 end
