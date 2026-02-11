@@ -23,22 +23,7 @@ local debug = ngx.config.debug
 local crc32 = ngx.crc32_short
 local pcall = pcall
 local pairs = pairs
-local type = type
-local tostring = tostring
-local string_sub = string.sub
 
--- Helper function to safely truncate message for logging
-local function truncate_for_log(val, max_len)
-    max_len = 2000
-    if val == nil then
-        return "nil"
-    end
-    local str = tostring(val)
-    if #str > max_len then
-        return string_sub(str, 1, max_len) .. "...[truncated, total=" .. #str .. "]"
-    end
-    return str
-end
 
 local API_VERSION_V0 = 0
 local API_VERSION_V1 = 1
@@ -90,12 +75,6 @@ local function produce_encode(self, topic_partitions)
         req:int32(partitions.partition_num)
 
         for partition_id, buffer in pairs(partitions.partitions) do
-            -- Log each message in the buffer for debugging
-            local queue = buffer.queue
-            for i = 1, buffer.index, 2 do
-                local key = queue[i]
-                local msg = queue[i + 1]
-            end
             
             req:int32(partition_id)
 
@@ -289,15 +268,12 @@ local function _flush(premature, self)
 
     local ringbuffer = self.ringbuffer
     local sendbuffer = self.sendbuffer
-    local pop_count = 0
     
     while true do
         local topic, key, msg = ringbuffer:pop()
         if not topic then
             break
         end
-        
-        pop_count = pop_count + 1
 
         local partition_id, err = choose_partition(self, topic, key)
         if not partition_id then
@@ -314,9 +290,7 @@ local function _flush(premature, self)
 
     if not all_done then
         
-        local loop_iteration_count = 0
         for topic, partition_id, buffer in sendbuffer:loop() do
-            loop_iteration_count = loop_iteration_count + 1
             local queue, index, err, retryable = buffer.queue, buffer.index, buffer.err, buffer.retryable
         
 
