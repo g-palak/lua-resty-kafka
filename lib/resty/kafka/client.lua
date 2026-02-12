@@ -325,7 +325,7 @@ function _M.choose_broker(self, topic, partition_id)
 
     local config = brokers[partition.leader]
     if not config then
-        _fetch_metadata(self, topic)
+        -- _fetch_metadata(self, topic)
         ngx_log(WARN, "[TRACE-CLIENT] Broker ", partition.leader, " not found in broker list")
         ngx_log(WARN, "[TRACE-CLIENT] Available brokers:")
         for broker_id, broker_config in pairs(brokers) do
