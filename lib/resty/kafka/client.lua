@@ -33,14 +33,30 @@ local mt = { __index = _M }
 
 local function _metadata_cache(self, topic)
     if not topic then
+        ngx_log(WARN, "[TRACE-CLIENT] _metadata_cache called with no topic")
+        ngx_log(WARN, "[TRACE-CLIENT] CACHED brokers:")
+        for broker_id, broker_config in pairs(self.brokers) do
+            if type(broker_config) == "table" and broker_config.host then
+                ngx_log(WARN, "[TRACE-CLIENT]   Broker ", broker_id, ": ", 
+                    broker_config.host, ":", broker_config.port)
+            end
+        end
+        ngx_log(WARN, "[TRACE-CLIENT] CACHED topic_partitions:")
+        for topic, partitions in pairs(self.topic_partitions) do
+            if type(partitions) == "table" then
+                ngx_log(WARN, "[TRACE-CLIENT]   Topic ", topic, ": ", partitions.num)
+            end
+        end
         return self.brokers, self.topic_partitions
     end
 
     local partitions = self.topic_partitions[topic]
     if partitions and partitions.num and partitions.num > 0 then
+        ngx_log(WARN, "[TRACE-CLIENT] _metadata_cache called with topic=", topic, " - cache hit")
         return self.brokers, partitions
     end
 
+    ngx_log(WARN, "[TRACE-CLIENT] _metadata_cache called with topic=", topic, " - cache miss")
     return nil, "not found topic"
 end
 
@@ -292,6 +308,13 @@ function _M.fetch_metadata(self, topic)
     local brokers, partitions = _metadata_cache(self, topic)
     if brokers then
         ngx_log(WARN, "[TRACE-CLIENT] fetch_metadata for topic=", topic, " - using CACHED metadata")
+        ngx_log(WARN, "[TRACE-CLIENT] CACHED metadata:")
+        for broker_id, broker_config in pairs(brokers) do
+            if type(broker_config) == "table" and broker_config.host then
+                ngx_log(WARN, "[TRACE-CLIENT]   Broker ", broker_id, ": ", 
+                    broker_config.host, ":", broker_config.port)
+            end
+        end
         return brokers, partitions
     end
 
